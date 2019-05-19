@@ -1,0 +1,35 @@
+{
+  "secret": "00000000-1111-aaaa-bbbb-12345678abcd",
+
+  "admin_password": "cetrifugodachacam",
+  "admin_secret": "qwerty123451dsdffdgfgtg45vt4y457u567i8",
+
+  "connection_lifetime": 0,
+  "anonymous": true,
+  "publish": false,
+  "watch": false,
+  "presence": false,
+  "join_leave": false,
+  "history_size": 5,
+  "history_lifetime": 500,
+  "recover": false,
+
+  "namespaces": [
+	{
+	  "name": "cam",
+	  "anonymous": true,
+	  "history_size": 5,
+	  "history_lifetime": 1200,
+	  "recover": false,
+	  "watch": false
+        },
+        {
+	  "name": "cam_home",
+	  "anonymous": false,
+	  "history_size": 5,
+	  "history_lifetime": 1200,
+	  "watch": false
+        }
+  ]
+}
+
