@@ -95,6 +95,7 @@ public class Cam1 {
     static int[] p = { CV_IMWRITE_JPEG_QUALITY, JpegQuality, 0 };
     //abstract void storeImage(IplImage img);
     static String Cam;
+    static String Url = "";
     static String FILENAME;
     static long ForceNextTime = System.currentTimeMillis() + 300000;
 
@@ -119,6 +120,8 @@ public class Cam1 {
     static int FrameRate;
     static int DarkHourFrom = 20;
     static int DarkHourTo = 5;
+    static boolean RecordVideo = false;
+    static boolean SendImage = true;
     static FFmpegFrameRecorder recorder;
 
     static int width;
@@ -152,6 +155,12 @@ public class Cam1 {
         if (r.containsKey("ShowImage") && Integer.parseInt(r.getString("ShowImage")) == 1)
             ShowImage = true;
 
+        if (r.containsKey("RecordVideo") && Integer.parseInt(r.getString("RecordVideo")) == 1)
+            RecordVideo = true;
+
+        if (r.containsKey("SendImage") && Integer.parseInt(r.getString("SendImage")) == 1)
+            SendImage = true;
+
         if (r.containsKey("ThresholdVal"))
             ThresholdVal = Integer.parseInt(r.getString("ThresholdVal"));
         if (r.containsKey("ThresholdMax"))
@@ -164,14 +173,22 @@ public class Cam1 {
             JpegQuality = Integer.parseInt(r.getString("JpegQuality"));
             p[1] = JpegQuality;
         }
+        if (r.containsKey("RecordVideo") && Integer.parseInt(r.getString("RecordVideo")) == 1)
+            RecordVideo = true;
 
         if (r.containsKey("UpdateTime"))
             UpdateInterval = Integer.parseInt(r.getString("UpdateTime")) * 1000;
 
+        if (r.containsKey("Url"))
+            Url = r.getString("Url");
+
         System.out.println("------ " + Cam + " ------");
         System.out.println("Source: " + r.getString("Source"));
+        System.out.println("Url: " + Url);
         System.out.println("ShowTimestamp:" + ShowTimestamp);
         System.out.println("ShowImage:" + ShowImage);
+        System.out.println("RecordVideo:" + RecordVideo);
+        System.out.println("SendImage:" + SendImage);
         System.out.println("ThresholdVal:" + ThresholdVal);
         System.out.println("ThresholdMax:" + ThresholdMax);
         System.out.println("DiffValue:" + DiffValue);
@@ -195,19 +212,20 @@ public class Cam1 {
             width = grabber.getImageWidth();
             height = grabber.getImageHeight();
 
-            recorder = new FFmpegFrameRecorder(FILENAME, width, height);
+            if (RecordVideo) {
+                recorder = new FFmpegFrameRecorder(FILENAME, width, height);
 
-            recorder.setVideoCodec(AV_CODEC_ID_H264); //13
-            recorder.setVideoOption("preset", "ultrafast");
+                recorder.setVideoCodec(AV_CODEC_ID_H264); //13
+                recorder.setVideoOption("preset", "ultrafast");
 
-            recorder.setFormat("flv");
+                recorder.setFormat("flv");
 
-            //recorder.setPixelFormat(0); //PIX_FMT_YUV420P
+                //recorder.setPixelFormat(0); //PIX_FMT_YUV420P
 
-            recorder.setFrameRate(FrameRate);
-            recorder.setVideoBitrate(2 * width * height);
-            recorder.start();
-
+                recorder.setFrameRate(FrameRate);
+                recorder.setVideoBitrate(2 * width * height);
+                recorder.start();
+            }
             if (ShowTimestamp) {
                 pos = new CvPoint();
                 posS = new CvPoint();
@@ -215,7 +233,7 @@ public class Cam1 {
 
                 //pos.x(width - 200).y(height - 30);
                 //posS.x(width - 200 + 1).y(height - 30 + 1); // shadow
-                
+
                 pos.x(60).y(40);
                 posS.x(61).y(41); // shadow
 
@@ -236,7 +254,7 @@ public class Cam1 {
             while (canvas.isVisible() && (img) != null) {
 
                 // запись старого файла и инициализация нового
-                if (System.currentTimeMillis() > nextTimeVideo) {
+                if (RecordVideo && System.currentTimeMillis() > nextTimeVideo) {
                     splitVideo();
                 }
 
@@ -249,7 +267,8 @@ public class Cam1 {
                         canvas.showImage(img);
                     }
 
-                    recorder.record(img);
+                    if (RecordVideo)
+                        recorder.record(img);
 
 
                     if (System.currentTimeMillis() > ForceNextTime) {
@@ -269,7 +288,8 @@ public class Cam1 {
                 //img.release();
                 img = grabber.grab();
             }
-            recorder.stop();
+            if (RecordVideo)
+                recorder.stop();
 
             File file = new File(FILENAME);
             String timeStamp = fileTimeStamp.format(Calendar.getInstance().getTime());
@@ -293,6 +313,9 @@ public class Cam1 {
     }
 
     private static void splitVideo() {
+        if (!RecordVideo)
+            return;
+
         try {
             recorder.stop();
             recorder.release();
@@ -366,61 +389,51 @@ public class Cam1 {
             cvCopy(img, prevImg, null);
             //    prevImg = cvCloneImage(img);
 
-            // cvReleaseImage(img);
+            if (SendImage) {
 
-            int Hour = Integer.parseInt(HourSDF.format(Calendar.getInstance().getTime()));
+                // cvReleaseImage(img);
 
-            if (Hour >= DarkHourTo && Hour < DarkHourFrom)
-                ForceNextTime = System.currentTimeMillis() + 300000; // 5 min
-            else
-                ForceNextTime = System.currentTimeMillis() + 3600000; // 1 hour
+                int Hour = Integer.parseInt(HourSDF.format(Calendar.getInstance().getTime()));
 
+                if (Hour >= DarkHourTo && Hour < DarkHourFrom)
+                    ForceNextTime = System.currentTimeMillis() + 300000; // 5 min
+                else
+                    ForceNextTime = System.currentTimeMillis() + 3600000; // 1 hour
 
-            try {
-                CloseableHttpAsyncClient httpclient = HttpAsyncClients.createDefault();
                 try {
-                    httpclient.start();
+                    CloseableHttpAsyncClient httpclient = HttpAsyncClients.createDefault();
+                    try {
+                        httpclient.start();
 
-                    httpost =
-                            new ZeroCopyPost("http://localhost/webcam/save.php?c=" + Cam, new File("_photo/" +
-                                                                                                           Cam + "/" +
-                                                                                                           timeStamp2 +
-                                                                                                           ".jpg"),
-                                             ContentType.create("image/jpeg")); //ContentType.create("image/jpeg")
+                        httpost =
+                                new ZeroCopyPost("" + Url + Cam, new File("_photo/" + Cam + "/" + timeStamp2 + ".jpg"),
+                                                 ContentType.create("image/jpeg")); //ContentType.create("image/jpeg")
 
-                    future = httpclient.execute(httpost, consumer, null);
-                    //HttpResponse response =
-                    future.get();
+                        future = httpclient.execute(httpost, consumer, null);
+                        //HttpResponse response =
+                        future.get();
 
-
-                    //System.out.println(httpclient..toString());
-                    //File result;
-                    //       result = future.get();
-                    //BasicHttpResponse result = future.get();
-                    // System.out.println("Response file length: " + result);
-
-                    httpost.close();
-                    System.out.println("Post image. . .");
-                } finally {
-                    httpclient.close();
+                        httpost.close();
+                        System.out.println("Post image. . .");
+                    } finally {
+                        httpclient.close();
+                    }
+                    System.out.println("Done");
+                } catch (FileNotFoundException fnfe) {
+                    // TODO: Add catch code
+                    System.out.println("FileNotFoundException");
+                    fnfe.printStackTrace();
+                } catch (IOException ioe) {
+                    // TODO: Add catch code
+                    System.out.println("IOException");
+                    ioe.printStackTrace();
                 }
-                System.out.println("Done");
-            } catch (FileNotFoundException fnfe) {
-                // TODO: Add catch code
-                System.out.println("FileNotFoundException");
-                fnfe.printStackTrace();
-            } catch (IOException ioe) {
-                // TODO: Add catch code
-                System.out.println("IOException");
-                ioe.printStackTrace();
             }
-
         } catch (Exception e) {
             // TODO: Add catch code
             System.out.println("storeImage");
             e.printStackTrace();
         }
-
 
     }
 
